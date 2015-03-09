@@ -30,7 +30,9 @@ typedef struct msg_struct_
 
 typedef struct control_struct_
 {
-    unsigned int   msg_size;
+	pthread_mutex_t  mutex_var;
+	pthread_cond_t   cond_var;
+	unsigned int   msg_size;
     char           msg_count;
     char           msg_status;
     char           read_state;
@@ -44,6 +46,7 @@ typedef struct control_struct_
 #include <iostream>
 #include <cstring>
 #include <boost/interprocess/sync/named_condition.hpp>
+#include <boost/interprocess/sync/named_condition_any.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
 
 using namespace boost::interprocess;
@@ -51,22 +54,30 @@ using namespace boost::interprocess;
 int main ()
 {
 
-    boost::interprocess::named_mutex mutex(open_or_create, "MyMutex");
+	try{
+		std::cout << "Start" << std::endl;
 
+    shared_memory_object shm
+          (open_only                    //only create
+          ,"MRSTPSharedMemory"              //name
+          ,read_write                   //read-write mode
+          );
+/*
+    std::cout << "Start" << std::endl;
     //Condition to wait when the queue is empty
-    boost::interprocess::named_condition  cond_empty(open_or_create, "cond_empty");
+    boost::interprocess::named_condition  cond_empty(open_only, "cond_empty");
 
     //Condition to wait when the queue is full
-    boost::interprocess::named_condition  cond_full(open_or_create, "cond_full");
-
+    boost::interprocess::named_condition_any  cond_full(open_or_create, "cond_full");*/
+    std::cout << "Start" << std::endl;
     //Create a shared memory object.
-   shared_memory_object shm
+/*   shared_memory_object shm
       (open_only                    //only create
-      ,"MySharedMemory"              //name
+      ,"MRSTPSharedMemory"              //name
       ,read_write                   //read-write mode
-      );
+      );*/
 
-   try{
+   std::cout << "Start" << std::endl;
       //Map the whole shared memory in this process
       mapped_region region
          (shm                       //What to map
@@ -78,14 +89,18 @@ int main ()
       //Obtain a pointer to the shared structure
 
       //Print messages until the other process marks the end
+      std::cout << "Start" << std::endl;
       bool end_loop = false;
+      std::cout << "Out mutex" << std::endl;
       do{
-         scoped_lock<named_mutex> lock(mutex);
+    	  pthread_mutex_lock(&pointControl->mutex_var);
+         std::cout << "In mutex" << std::endl;
          if(!pointControl->msg_status){
              std::cout << "Wait" << std::endl;
-            cond_empty.wait(lock);
+             pthread_cond_wait(&pointControl->cond_var,&pointControl->mutex_var);
 
          }
+         sleep(2);
 
          pointControl->read_state %= pointControl->msg_count;
 
@@ -106,6 +121,10 @@ int main ()
              std::cout << result << std::flush;
          }
          pointControl->msg_status = 0;
+
+         pthread_mutex_unlock(&pointControl->mutex_var);
+         std::cout << "Out mutex" << std::endl;
+         sleep(2);
       }
       while(!end_loop);
    }
